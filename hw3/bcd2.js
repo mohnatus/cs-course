@@ -1,76 +1,83 @@
-class BCD {
-  constructor(num) {
-    this.length = 0
-    this.bytes = new Uint8Array(new ArrayBuffer(4, { maxByteLength: 200 }))
+export class BCD {
+  #bytes = new Uint8Array(new ArrayBuffer(4, { maxByteLength: 100 }))
+  #length = 0
 
-    const addToBytes = (value) => {
-      const cursor = Math.floor(this.length / 2)
-
-      if (this.bytes.length - 1 <= cursor) {
-        this.bytes.buffer.resize(this.bytes.length * 2)
-      }
-      if (this.length % 2 === 0) {
-        this.bytes[cursor] |= value
-      } else {
-        this.bytes[cursor] |= (value << 4)
-      }
-
-      this.length++
-    }
+  constructor(num) { // num = 65536
+    let cursor = 0
 
     do {
-      addToBytes(num % 10)
+      this.addToBytes(cursor, num % 10) // 6 3 5 5 6
       num = Math.floor(num / 10)
-
+      cursor++
     } while (num)
+
+    this.#length = cursor
+    // #bytes = 6_3 5_5 6_0 0_0
+
+    console.log(this.#bytes, this.#length)
+  }
+
+  addToBytes(cursor, value) {
+    const byteIndex = Math.floor(cursor / 2)
+
+    if (this.#bytes.length - 1 <= byteIndex) {
+      this.#bytes.buffer.resize(this.#bytes.length * 2)
+    }
+
+    if (cursor % 2) { // вторые полбайта
+      this.#bytes[byteIndex] |= value
+    } else { // первые полбайта
+      this.#bytes[byteIndex] |= (value << 4)
+    }
+  }
+
+  getDigit(index) {
+    let byteIndex = Math.floor(index / 2)
+
+    if (index % 2) { // второй полубайт
+      return this.#bytes[byteIndex] & 0b1111
+
+    }
+    // первый полубайт
+    return this.#bytes[byteIndex] >>> 4 & 0b1111
   }
 
   toNumber() {
-    let num = 0
-    let index = 0
+    let result = 0
 
-    for (let i = 0; i < this.bytes.length; i++) {
-      num += (this.bytes[i] & 0b1111) * 10 ** index
-      index++
-      num += (this.bytes[i] >>> 4 & 0b1111) * 10 ** index
-      index++
+    for (let i = 0; i < this.#length; i++) {
+      result += this.getDigit(i) * 10 ** i
     }
 
-    return num
+    return result
   }
 
   toString() {
-    let string = ''
+    let result = ''
 
-    let skip = this.length % 2 !== 0
+    // let skip = this.length % 2 !== 0
 
-    for (let i = this.bytes.length - 1; i--;) {
-      let a = this.bytes[i] >>> 4 
-      let b = this.bytes[i]  & 0b1111
-      if (!skip) {
-        string += (this.bytes[i] >>> 4)
-      }
-      string += (this.bytes[i] & 0b1111)
-      skip = false
+    for (let i = this.#length - 1; i >= 0; i--) {
+      result += this.getDigit(i)
+      // let a = this.bytes[i] >>> 4
+      // let b = this.bytes[i] & 0b1111
+      // if (!skip) {
+      //   string += (this.bytes[i] >>> 4)
+      // }
+      // string += (this.bytes[i] & 0b1111)
+      // skip = false
     }
-    return string
+    return result
+  }
+
+  getNormalizedIndex(index) {
+    let normalizedIndex = index < 0 ? this.#length + index : index
+    if (normalizedIndex >= this.#length) return -1
+    return this.#length - 1 - normalizedIndex
   }
 
   at(index) {
-    const normalizedIndex = index >= 0 ? index : this.length + index
-    const reversedIndex = this.length - 1 - normalizedIndex;
-    const byte = this.bytes[Math.floor(reversedIndex / 2)]
-    const offset = reversedIndex % 2 ? 4 : 0
-    return (byte >>> offset) & 0b1111
+    const normalizedIndex = this.getNormalizedIndex(index)
+    return this.getDigit(normalizedIndex)
   }
 }
-
-const n = new BCD(65536)
-
-console.log(n.toNumber()) // 65536
-console.log(n.toString()) // '65536'
-
-console.log(n.at(0)) // 6
-console.log(n.at(1)) // 5
-console.log(n.at(-1)) // 6
-console.log(n.at(-2)) // 3
